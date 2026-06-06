@@ -2,7 +2,7 @@ import streamlit as st
 
 from agents import AGENTS, build_prompt
 from graph import RULES, run
-from knowledge_base.prompt import build_knowledge_context, list_categories
+from knowledge_base.prompt import build_knowledge_context, list_allowed_diseases, list_categories
 from models import Diagnosis
 
 
@@ -27,7 +27,8 @@ def _diagnoses_to_rows(diagnoses: list[Diagnosis]) -> list[dict[str, str]]:
 # Build the agent prompt shown to every active model.
 def _preview_prompt(case_text: str, active_categories: list[str]) -> str:
     knowledge_context = build_knowledge_context(active_categories)
-    return build_prompt(case_text.strip(), knowledge_context)
+    allowed_diseases = list_allowed_diseases(active_categories)
+    return build_prompt(case_text.strip(), knowledge_context, allowed_diseases)
 
 
 # Render a read-only preview of the prompt sent to each active agent.
@@ -91,7 +92,7 @@ def main() -> None:
 
         try:
             with st.spinner("Running clinical analysis..."):
-                result, diagnoses = run(
+                result, diagnoses, agent_failures = run(
                     case_text,
                     method,
                     active_agents,
@@ -100,6 +101,12 @@ def main() -> None:
         except Exception as exc:
             st.error(f"Analysis failed: {exc}")
             return
+
+        if agent_failures:
+            st.warning(
+                "Some agents returned invalid responses and were excluded "
+                "from aggregation:\n\n" + "\n".join(f"- {item}" for item in agent_failures)
+            )
 
         st.subheader("Final result")
         st.success(result)

@@ -58,16 +58,39 @@ def _format_category(title: str, disorders: list[dict[str, Any]]) -> str:
     return "\n".join(sections).strip()
 
 
+# Load title and disorders for each selected category id.
+def _iter_category_disorders(
+    category_ids: list[str],
+) -> list[tuple[str, list[dict[str, Any]]]]:
+    categories: list[tuple[str, list[dict[str, Any]]]] = []
+    for category_id in category_ids:
+        module = _load_category_module(category_id)
+        title = getattr(module, "CATEGORY_TITLE", CATEGORIES[category_id]["title"])
+        categories.append((title, module.DISORDERS))
+    return categories
+
+
+# Return unique disorder labels from the selected categories, in first-seen order.
+def list_allowed_diseases(category_ids: list[str]) -> list[str]:
+    allowed: list[str] = []
+    seen: set[str] = set()
+    for _, disorders in _iter_category_disorders(category_ids):
+        for disorder in disorders:
+            label = disorder["label"].strip()
+            key = label.lower()
+            if key not in seen:
+                seen.add(key)
+                allowed.append(label)
+    return allowed
+
+
 # Build the DSM-5 reference block appended to agent prompts for selected categories.
 def build_knowledge_context(category_ids: list[str]) -> str:
     if not category_ids:
         return ""
 
-    sections: list[str] = []
-    for category_id in category_ids:
-        module = _load_category_module(category_id)
-        title = getattr(module, "CATEGORY_TITLE", CATEGORIES[category_id]["title"])
-        disorders = module.DISORDERS
-        sections.append(_format_category(title, disorders))
-
+    sections = [
+        _format_category(title, disorders)
+        for title, disorders in _iter_category_disorders(category_ids)
+    ]
     return "\n\n".join(sections)

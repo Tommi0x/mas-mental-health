@@ -6,15 +6,51 @@ from models import Diagnosis
 
 PROMPT_CLINICAL_HEADER = """You are a psychiatrist. Analyze the case using DSM-5 criteria."""
 
-PROMPT_CLINICAL_FOOTER = """Respond with ONLY valid JSON (no markdown, no text outside the JSON object) using exactly these keys:
-{"disease": "<primary psychiatric diagnosis>", "explanation": "<brief clinical reasoning>"}
+PROMPT_JSON_OPEN = """Respond with ONLY valid JSON (no markdown, no text outside the JSON object) using exactly these keys:"""
 
-Case:
+PROMPT_JSON_OPEN_CONSTRAINED = """Respond with ONLY valid JSON (no markdown, no text outside the JSON object) using exactly these keys.
+The "disease" value MUST be exactly one of the allowed diagnosis labels listed below (copy verbatim):"""
+
+PROMPT_JSON_TEMPLATE = """{"disease": "<primary psychiatric diagnosis>", "explanation": "<brief clinical reasoning>"}"""
+
+PROMPT_JSON_TEMPLATE_CONSTRAINED = """{"disease": "<one allowed diagnosis label>", "explanation": "<brief clinical reasoning>"}"""
+
+PROMPT_CASE_LABEL = """Case:
 """
 
 
+# Build the JSON response instructions, optionally restricted to allowed disease labels.
+def _build_json_instructions(allowed_diseases: list[str]) -> str:
+    if not allowed_diseases:
+        return "\n".join(
+            [
+                PROMPT_JSON_OPEN,
+                PROMPT_JSON_TEMPLATE,
+                "",
+                PROMPT_CASE_LABEL.strip(),
+            ]
+        )
+
+    allowed_lines = "\n".join(f"- {label}" for label in allowed_diseases)
+    return "\n".join(
+        [
+            PROMPT_JSON_OPEN_CONSTRAINED,
+            allowed_lines,
+            "",
+            PROMPT_JSON_TEMPLATE_CONSTRAINED,
+            "",
+            PROMPT_CASE_LABEL.strip(),
+        ]
+    )
+
+
 # Build the full agent prompt, optionally including selected knowledge base sections.
-def build_prompt(case_text: str, knowledge_context: str) -> str:
+def build_prompt(
+    case_text: str,
+    knowledge_context: str,
+    allowed_diseases: list[str] | None = None,
+) -> str:
+    diseases = allowed_diseases or []
     parts = [PROMPT_CLINICAL_HEADER.strip()]
 
     if knowledge_context.strip():
@@ -27,7 +63,7 @@ def build_prompt(case_text: str, knowledge_context: str) -> str:
             ]
         )
 
-    parts.extend(["", PROMPT_CLINICAL_FOOTER.strip(), case_text.strip()])
+    parts.extend(["", _build_json_instructions(diseases), case_text.strip()])
     return "\n".join(parts)
 
 AGENTS: list[dict[str, str]] = [
@@ -49,8 +85,26 @@ def _extract_json_object(raw: str) -> str:
     return raw[start : end + 1]
 
 
+# Match a model disease label to a canonical allowed label when constraints apply.
+def _resolve_allowed_disease(disease: str, allowed_diseases: list[str]) -> str:
+    if not allowed_diseases:
+        return disease.strip()
+
+    normalized = disease.strip().lower()
+    for label in allowed_diseases:
+        if label.lower() == normalized:
+            return label
+
+    raise ValueError(f"Disease '{disease.strip()}' is not allowed.")
+
+
 # Parse the model JSON into a Diagnosis with agent and model fields filled in.
-def _parse_diagnosis(raw: str, agent_name: str, model_used: str) -> Diagnosis:
+def _parse_diagnosis(
+    raw: str,
+    agent_name: str,
+    model_used: str,
+    allowed_diseases: list[str] | None = None,
+) -> Diagnosis:
     payload: dict[str, Any] = json.loads(_extract_json_object(raw))
     disease = payload.get("disease")
     explanation = payload.get("explanation")
@@ -58,10 +112,11 @@ def _parse_diagnosis(raw: str, agent_name: str, model_used: str) -> Diagnosis:
         raise ValueError("Missing or invalid 'disease' in model response")
     if not isinstance(explanation, str) or not explanation.strip():
         raise ValueError("Missing or invalid 'explanation' in model response")
+    resolved_disease = _resolve_allowed_disease(disease, allowed_diseases or [])
     return Diagnosis(
         agent_name=agent_name,
         model_used=model_used,
-        disease=disease.strip(),
+        disease=resolved_disease,
         explanation=explanation.strip(),
     )
 
@@ -71,22 +126,30 @@ def run_agent(
     cfg: dict[str, str],
     case_text: str,
     knowledge_context: str = "",
+    allowed_diseases: list[str] | None = None,
 ) -> Diagnosis:
-    prompt = build_prompt(case_text, knowledge_context)
+    prompt = build_prompt(case_text, knowledge_context, allowed_diseases)
     raw = ask_llm(prompt, cfg["model"])
-    return _parse_diagnosis(raw, cfg["name"], cfg["model"])
+    return _parse_diagnosis(raw, cfg["name"], cfg["model"], allowed_diseases)
 
 
-# Run each named active agent on the case and return all diagnoses in order.
+# Run each named active agent and return valid diagnoses plus per-agent failures.
 def run_all_agents(
     case_text: str,
     active_agent_names: list[str],
     knowledge_context: str = "",
-) -> list[Diagnosis]:
+    allowed_diseases: list[str] | None = None,
+) -> tuple[list[Diagnosis], list[str]]:
     results: list[Diagnosis] = []
+    failures: list[str] = []
     for name in active_agent_names:
         cfg = _AGENT_BY_NAME.get(name)
         if cfg is None:
             raise ValueError(f"Unknown agent: {name}")
-        results.append(run_agent(cfg, case_text, knowledge_context))
-    return results
+        try:
+            results.append(
+                run_agent(cfg, case_text, knowledge_context, allowed_diseases)
+            )
+        except Exception as exc:
+            failures.append(f"{name}: {exc}")
+    return results, failures
