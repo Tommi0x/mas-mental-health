@@ -67,10 +67,12 @@ def build_prompt(
     return "\n".join(parts)
 
 AGENTS: list[dict[str, str]] = [
-    {"name": "Judge_Llama", "model": "ollama/llama3.2"},
-    {"name": "Judge_Mistral", "model": "ollama/mistral"},
-    {"name": "Judge_Phi", "model": "ollama/phi3"},
-    {"name": "Judge_Gemma", "model": "ollama/gemma2:2b"},
+    {"name": "Judge_Llama70B", "model": "groq/llama-3.3-70b-versatile"},
+    {"name": "Judge_Llama8B", "model": "groq/llama-3.1-8b-instant"},
+    {"name": "Judge_Qwen32B", "model": "groq/qwen/qwen3-32b"},
+    {"name": "Judge_Llama4Scout", "model": "groq/meta-llama/llama-4-scout-17b-16e-instruct"},
+    {"name": "Judge_OSS20B", "model": "groq/openai/gpt-oss-20b"},
+    {"name": "Judge_OSS120B", "model": "groq/openai/gpt-oss-120b"},
 ]
 
 _AGENT_BY_NAME = {a["name"]: a for a in AGENTS}

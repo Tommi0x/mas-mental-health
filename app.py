@@ -1,3 +1,5 @@
+import os
+
 import streamlit as st
 
 from agents import AGENTS, build_prompt
@@ -6,9 +8,14 @@ from knowledge_base.prompt import build_knowledge_context, list_allowed_diseases
 from models import Diagnosis
 
 
+# Return all configured agent names for multiselect options.
+def _all_agent_names() -> list[str]:
+    return [agent["name"] for agent in AGENTS]
+
+
 # Return the agent names used as the default selection in the UI.
 def _default_active_agents() -> list[str]:
-    return [agent["name"] for agent in AGENTS]
+    return _all_agent_names()[:4]
 
 
 # Return category ids and a lookup map from id to display title.
@@ -42,6 +49,17 @@ def _render_prompt_preview(case_text: str, active_categories: list[str]) -> None
 # Render the sidebar with agent details.
 def _render_sidebar() -> None:
     st.sidebar.header("Configuration")
+
+    groq_configured = bool(os.environ.get("GROQ_API_KEY", "").strip())
+    st.sidebar.subheader("Groq API")
+    if groq_configured:
+        st.sidebar.success("GROQ_API_KEY is configured.")
+    else:
+        st.sidebar.warning(
+            "Set `GROQ_API_KEY` in a `.env` file or your environment. "
+            "Create a free key at https://console.groq.com"
+        )
+
     st.sidebar.subheader("Available agents")
     for agent in AGENTS:
         st.sidebar.markdown(f"- `{agent['name']}` -> `{agent['model']}`")
@@ -60,7 +78,7 @@ def main() -> None:
 
     active_agents = st.multiselect(
         "Active agents",
-        options=_default_active_agents(),
+        options=_all_agent_names(),
         default=_default_active_agents(),
     )
 
@@ -88,6 +106,12 @@ def main() -> None:
             return
         if not active_agents:
             st.error("Select at least one active agent.")
+            return
+        if not os.environ.get("GROQ_API_KEY", "").strip():
+            st.error(
+                "GROQ_API_KEY is not set. Copy `.env.example` to `.env`, add your free "
+                "Groq key from https://console.groq.com, then restart the app."
+            )
             return
 
         try:

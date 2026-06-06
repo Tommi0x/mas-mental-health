@@ -1,19 +1,14 @@
+from agents import AGENTS
 from llm import ask_llm
-
-TEST_MODELS = [
-    "ollama/llama3.2",
-    "ollama/mistral",
-    "ollama/phi3",
-    "ollama/gemma2:2b",
-]
 
 TEST_PROMPT = "Reply with exactly one short sentence confirming you received this test."
 
 
-# Run a short test prompt against each model in TEST_MODELS and print the replies.
+# Run a short test prompt against each configured agent model and print the replies.
 def main() -> None:
-    for model in TEST_MODELS:
-        print(f"\n--- {model} ---")
+    for agent in AGENTS:
+        model = agent["model"]
+        print(f"\n--- {agent['name']} ({model}) ---")
         try:
             text = ask_llm(TEST_PROMPT, model)
             print(text)
