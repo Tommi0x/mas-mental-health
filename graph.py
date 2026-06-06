@@ -4,6 +4,7 @@ from langgraph.graph import END, START, StateGraph
 
 from agents import run_all_agents
 from aggregate import aggregate_majority, aggregate_unanimity
+from knowledge_base.prompt import build_knowledge_context
 from models import Diagnosis
 
 AggregationRule = Callable[[list[Diagnosis]], str]
@@ -12,6 +13,7 @@ AggregationRule = Callable[[list[Diagnosis]], str]
 class ClinicalGraphState(TypedDict):
     text: str
     active_agents: list[str]
+    active_categories: list[str]
     method: str
     diagnoses: list[Diagnosis]
     result: str
@@ -25,7 +27,12 @@ RULES: dict[str, AggregationRule] = {
 
 # Run the selected agents and store their diagnoses in state.
 def execute_agents(state: ClinicalGraphState) -> dict[str, list[Diagnosis]]:
-    diagnoses = run_all_agents(state["text"], state["active_agents"])
+    knowledge_context = build_knowledge_context(state["active_categories"])
+    diagnoses = run_all_agents(
+        state["text"],
+        state["active_agents"],
+        knowledge_context,
+    )
     return {"diagnoses": diagnoses}
 
 
@@ -52,13 +59,19 @@ _GRAPH = _build_graph()
 
 
 # Run the workflow and return the final result with all diagnoses.
-def run(text: str, method: str, active_agents: list[str]) -> tuple[str, list[Diagnosis]]:
+def run(
+    text: str,
+    method: str,
+    active_agents: list[str],
+    active_categories: list[str] | None = None,
+) -> tuple[str, list[Diagnosis]]:
     if not active_agents:
         raise ValueError("At least one active agent is required")
 
     state: ClinicalGraphState = {
         "text": text,
         "active_agents": active_agents,
+        "active_categories": active_categories or [],
         "method": method,
         "diagnoses": [],
         "result": "",
