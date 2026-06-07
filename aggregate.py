@@ -1,3 +1,4 @@
+import math
 from collections import Counter
 
 from models import Diagnosis
@@ -39,16 +40,52 @@ def aggregate_majority(diagnoses: list[Diagnosis]) -> str:
     return f"Tie between: {', '.join(winners)}"
 
 
-# Return the shared diagnosis when all agents agree.
-def aggregate_unanimity(diagnoses: list[Diagnosis]) -> str:
+# Return the diagnosis when at least 75% of agents agree.
+def aggregate_superconsent(diagnoses: list[Diagnosis]) -> str:
     if not diagnoses:
         raise ValueError("Cannot aggregate an empty diagnosis list")
 
     normalized_labels, display_labels = _collect_disease_labels(diagnoses)
-    unique_labels = set(normalized_labels)
+    votes = Counter(normalized_labels)
+    threshold = math.ceil(0.75 * len(diagnoses))
+    winners = sorted(
+        display_labels[label]
+        for label, count in votes.items()
+        if count >= threshold
+    )
 
-    if len(unique_labels) == 1:
-        only_label = next(iter(unique_labels))
-        return display_labels[only_label]
+    if len(winners) == 1:
+        return winners[0]
 
-    return "No unanimity among judges"
+    return "No superconsent (75% agreement required)"
+
+
+# Return the diagnosis with the highest Copeland pairwise-victory score.
+def aggregate_copeland(diagnoses: list[Diagnosis]) -> str:
+    if not diagnoses:
+        raise ValueError("Cannot aggregate an empty diagnosis list")
+
+    normalized_labels, display_labels = _collect_disease_labels(diagnoses)
+    votes = Counter(normalized_labels)
+    candidates = list(votes.keys())
+
+    copeland_scores: dict[str, int] = {}
+    for candidate in candidates:
+        wins = sum(
+            1
+            for other in candidates
+            if other != candidate and votes[candidate] > votes[other]
+        )
+        copeland_scores[candidate] = wins
+
+    top_score = max(copeland_scores.values())
+    winners = sorted(
+        display_labels[label]
+        for label, score in copeland_scores.items()
+        if score == top_score
+    )
+
+    if len(winners) == 1:
+        return winners[0]
+
+    return f"Tie between: {', '.join(winners)}"

@@ -3,7 +3,7 @@ from typing import Callable, TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from agents import run_all_agents
-from aggregate import aggregate_majority, aggregate_unanimity
+from aggregate import aggregate_copeland, aggregate_majority, aggregate_superconsent
 from knowledge_base.prompt import build_knowledge_context, list_allowed_diseases
 from models import Diagnosis
 
@@ -22,7 +22,8 @@ class ClinicalGraphState(TypedDict):
 
 RULES: dict[str, AggregationRule] = {
     "majority": aggregate_majority,
-    "unanimity": aggregate_unanimity,
+    "superconsent": aggregate_superconsent,
+    "copeland": aggregate_copeland,
 }
 
 

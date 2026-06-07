@@ -1,6 +1,6 @@
 # MAS Clinical Diagnosis
 
-Model-based multi-agent system for psychiatric clinical cases. Multiple LLM judges analyze the same free-text case independently; results are aggregated by majority or unanimity.
+Model-based multi-agent system for psychiatric clinical cases. Multiple LLM judges analyze the same free-text case independently; results are aggregated by majority, superconsent (75%), or Copeland score.
 
 ## Requirements
 
@@ -60,7 +60,7 @@ All agents use Groq's free tier via LiteLLM:
 - `agents.py` — agent definitions and prompts
 - `llm.py` — LiteLLM wrapper
 - `graph.py` — LangGraph workflow and aggregation rules
-- `aggregate.py` — majority / unanimity rules
+- `aggregate.py` — majority, superconsent, and Copeland rules
 - `models.py` — Pydantic data models
 - `knowledge_base/` — DSM-5 reference sections for prompts
 
