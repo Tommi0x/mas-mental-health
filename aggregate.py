@@ -40,14 +40,19 @@ def aggregate_majority(diagnoses: list[Diagnosis]) -> str:
     return f"Tie between: {', '.join(winners)}"
 
 
-# Return the diagnosis when at least 75% of agents agree.
-def aggregate_superconsent(diagnoses: list[Diagnosis]) -> str:
+# Return the diagnosis when at least the given share of agents agree.
+def aggregate_superconsent(
+    diagnoses: list[Diagnosis],
+    agreement_percent: int = 75,
+) -> str:
     if not diagnoses:
         raise ValueError("Cannot aggregate an empty diagnosis list")
+    if not 1 <= agreement_percent <= 100:
+        raise ValueError("agreement_percent must be between 1 and 100")
 
     normalized_labels, display_labels = _collect_disease_labels(diagnoses)
     votes = Counter(normalized_labels)
-    threshold = math.ceil(0.75 * len(diagnoses))
+    threshold = math.ceil(agreement_percent / 100 * len(diagnoses))
     winners = sorted(
         display_labels[label]
         for label, count in votes.items()
@@ -57,7 +62,40 @@ def aggregate_superconsent(diagnoses: list[Diagnosis]) -> str:
     if len(winners) == 1:
         return winners[0]
 
-    return "No superconsent (75% agreement required)"
+    return f"No superconsent ({agreement_percent}% agreement required)"
+
+
+# Return the diagnosis with the highest sum of agent weights.
+def aggregate_weighted(
+    diagnoses: list[Diagnosis],
+    agent_weights: dict[str, float],
+) -> str:
+    if not diagnoses:
+        raise ValueError("Cannot aggregate an empty diagnosis list")
+
+    weighted_votes: dict[str, float] = {}
+    display_labels: dict[str, str] = {}
+
+    for diagnosis in diagnoses:
+        display_label = diagnosis.disease.strip()
+        normalized_label = display_label.lower()
+        display_labels.setdefault(normalized_label, display_label)
+        weight = agent_weights.get(diagnosis.agent_name, 1.0)
+        if weight <= 0:
+            raise ValueError(f"Weight for agent '{diagnosis.agent_name}' must be positive")
+        weighted_votes[normalized_label] = weighted_votes.get(normalized_label, 0.0) + weight
+
+    top_score = max(weighted_votes.values())
+    winners = sorted(
+        display_labels[label]
+        for label, score in weighted_votes.items()
+        if score == top_score
+    )
+
+    if len(winners) == 1:
+        return winners[0]
+
+    return f"Tie between: {', '.join(winners)}"
 
 
 # Return the diagnosis with the highest Copeland pairwise-victory score.

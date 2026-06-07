@@ -3,7 +3,12 @@ from typing import Callable, TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from agents import run_all_agents
-from aggregate import aggregate_copeland, aggregate_majority, aggregate_superconsent
+from aggregate import (
+    aggregate_copeland,
+    aggregate_majority,
+    aggregate_superconsent,
+    aggregate_weighted,
+)
 from knowledge_base.prompt import build_knowledge_context, list_allowed_diseases
 from models import Diagnosis
 
@@ -15,6 +20,8 @@ class ClinicalGraphState(TypedDict):
     active_agents: list[str]
     active_categories: list[str]
     method: str
+    agreement_percent: int
+    agent_weights: dict[str, float]
     diagnoses: list[Diagnosis]
     agent_failures: list[str]
     result: str
@@ -24,6 +31,7 @@ RULES: dict[str, AggregationRule] = {
     "majority": aggregate_majority,
     "superconsent": aggregate_superconsent,
     "copeland": aggregate_copeland,
+    "weighted": aggregate_weighted,
 }
 
 
@@ -46,10 +54,24 @@ def execute_agents(state: ClinicalGraphState) -> dict[str, list[Diagnosis] | lis
 
 # Apply the selected aggregation rule to the diagnoses in state.
 def aggregate_diagnoses(state: ClinicalGraphState) -> dict[str, str]:
-    rule = RULES.get(state["method"])
+    method = state["method"]
+    diagnoses = state["diagnoses"]
+
+    if method == "superconsent":
+        result = aggregate_superconsent(
+            diagnoses,
+            agreement_percent=state["agreement_percent"],
+        )
+        return {"result": result}
+
+    if method == "weighted":
+        result = aggregate_weighted(diagnoses, state["agent_weights"])
+        return {"result": result}
+
+    rule = RULES.get(method)
     if rule is None:
-        raise ValueError(f"Unknown aggregation method: {state['method']}")
-    return {"result": rule(state["diagnoses"])}
+        raise ValueError(f"Unknown aggregation method: {method}")
+    return {"result": rule(diagnoses)}
 
 
 # Build the LangGraph workflow used by the public run function.
@@ -72,6 +94,8 @@ def run(
     method: str,
     active_agents: list[str],
     active_categories: list[str] | None = None,
+    agreement_percent: int = 75,
+    agent_weights: dict[str, float] | None = None,
 ) -> tuple[str, list[Diagnosis], list[str]]:
     if not active_agents:
         raise ValueError("At least one active agent is required")
@@ -81,6 +105,8 @@ def run(
         "active_agents": active_agents,
         "active_categories": active_categories or [],
         "method": method,
+        "agreement_percent": agreement_percent,
+        "agent_weights": agent_weights or {},
         "diagnoses": [],
         "agent_failures": [],
         "result": "",

@@ -7,6 +7,16 @@ from graph import RULES, run
 from knowledge_base.prompt import build_knowledge_context, list_allowed_diseases, list_categories
 from models import Diagnosis
 
+_METHOD_DESCRIPTIONS: dict[str, str] = {
+    "majority": "The diagnosis with the most agent votes wins. Ties are reported explicitly.",
+    "superconsent": "A diagnosis wins only if enough agents agree, based on the threshold below.",
+    "copeland": (
+        "Each diagnosis earns points by beating others in pairwise vote comparisons; "
+        "the highest score wins."
+    ),
+    "weighted": "Each agent vote is multiplied by its weight; the diagnosis with the highest total wins.",
+}
+
 
 # Return all configured agent names for multiselect options.
 def _all_agent_names() -> list[str]:
@@ -76,11 +86,45 @@ def main() -> None:
 
     _render_sidebar()
 
-    active_agents = st.multiselect(
-        "Active agents",
-        options=_all_agent_names(),
-        default=_default_active_agents(),
-    )
+    agents_col, method_col = st.columns(2)
+
+    with agents_col:
+        active_agents = st.multiselect(
+            "Active agents",
+            options=_all_agent_names(),
+            default=_default_active_agents(),
+        )
+
+    with method_col:
+        method = st.selectbox("Aggregation method", options=list(RULES.keys()))
+        st.caption(_METHOD_DESCRIPTIONS[method])
+        agreement_percent = 75
+        agent_weights: dict[str, float] = {}
+        if method == "superconsent":
+            agreement_percent = st.slider(
+                "Agreement threshold (%)",
+                min_value=50,
+                max_value=100,
+                value=75,
+                step=1,
+                help="A diagnosis must reach this share of agent votes to win.",
+            )
+        elif method == "weighted":
+            st.caption(
+                "Set a weight for each active agent. Higher weights count more toward the final diagnosis."
+            )
+            if not active_agents:
+                st.info("Select at least one active agent to configure weights.")
+            else:
+                for agent_name in active_agents:
+                    agent_weights[agent_name] = st.number_input(
+                        agent_name,
+                        min_value=0.1,
+                        max_value=10.0,
+                        value=1.0,
+                        step=0.1,
+                        key=f"agent_weight_{agent_name}",
+                    )
 
     category_ids, category_labels = _category_options()
     active_categories = st.multiselect(
@@ -90,8 +134,6 @@ def main() -> None:
         format_func=lambda category_id: category_labels[category_id],
         help="Selected DSM-5 reference sections are appended to each agent prompt.",
     )
-
-    method = st.selectbox("Aggregation method", options=list(RULES.keys()))
     case_text = st.text_area(
         "Clinical case",
         height=240,
@@ -121,6 +163,8 @@ def main() -> None:
                     method,
                     active_agents,
                     active_categories,
+                    agreement_percent=agreement_percent,
+                    agent_weights=agent_weights,
                 )
         except Exception as exc:
             st.error(f"Analysis failed: {exc}")
