@@ -6,6 +6,7 @@ Model-based multi-agent system for psychiatric clinical cases. Multiple LLM judg
 
 - Python 3.11+
 - A free [Groq](https://console.groq.com) API key (no credit card required)
+- An optional free [Gemini](https://aistudio.google.com/apikey) API key for additional agents
 
 ## Setup
 
@@ -17,7 +18,7 @@ Model-based multi-agent system for psychiatric clinical cases. Multiple LLM judg
    pip install -r requirements.txt
    ```
 
-2. Copy the example environment file and add your Groq key:
+2. Copy the example environment file and add your API keys:
 
    ```bash
    copy .env.example .env
@@ -27,7 +28,10 @@ Model-based multi-agent system for psychiatric clinical cases. Multiple LLM judg
 
    ```
    GROQ_API_KEY=gsk_...
+   GEMINI_API_KEY=...
    ```
+
+   `GEMINI_API_KEY` is only required when you select Gemini agents in the app.
 
 3. Verify connectivity:
 
@@ -43,16 +47,21 @@ Model-based multi-agent system for psychiatric clinical cases. Multiple LLM judg
 
 ## Default agents
 
-All agents use Groq's free tier via LiteLLM:
+Agents use Groq and Gemini free tiers via LiteLLM:
 
 | Agent | Model |
 |-------|-------|
-| Judge_Llama70B | `groq/llama-3.3-70b-versatile` |
-| Judge_Llama8B | `groq/llama-3.1-8b-instant` |
-| Judge_Qwen32B | `groq/qwen/qwen3-32b` |
-| Judge_Llama4Scout | `groq/meta-llama/llama-4-scout-17b-16e-instruct` |
-| Judge_OSS20B | `groq/openai/gpt-oss-20b` |
-| Judge_OSS120B | `groq/openai/gpt-oss-120b` |
+| Llama70B | `groq/llama-3.3-70b-versatile` |
+| Llama8B | `groq/llama-3.1-8b-instant` |
+| Qwen32B | `groq/qwen/qwen3-32b` |
+| Llama4Scout | `groq/meta-llama/llama-4-scout-17b-16e-instruct` |
+| OSS20B | `groq/openai/gpt-oss-20b` |
+| OSS120B | `groq/openai/gpt-oss-120b` |
+| Gemini25Flash | `gemini/gemini-2.5-flash` |
+| Gemini25FlashLite | `gemini/gemini-2.5-flash-lite` |
+| Gemini3Flash | `gemini/gemini-3-flash-preview` |
+| Gemini31FlashLite | `gemini/gemini-3.1-flash-lite` |
+| Gemini35Flash | `gemini/gemini-3.5-flash` |
 
 ## Project layout
 
@@ -66,4 +75,4 @@ All agents use Groq's free tier via LiteLLM:
 
 ## Disclaimer
 
-This is a research demo, not a clinical tool. Case text is sent to Groq's API when you run an analysis.
+This is a research demo, not a clinical tool. Case text is sent to the configured cloud APIs (Groq, Gemini) when you run an analysis.

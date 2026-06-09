@@ -67,12 +67,17 @@ def build_prompt(
     return "\n".join(parts)
 
 AGENTS: list[dict[str, str]] = [
-    {"name": "Judge_Llama70B", "model": "groq/llama-3.3-70b-versatile"},
-    {"name": "Judge_Llama8B", "model": "groq/llama-3.1-8b-instant"},
-    {"name": "Judge_Qwen32B", "model": "groq/qwen/qwen3-32b"},
-    {"name": "Judge_Llama4Scout", "model": "groq/meta-llama/llama-4-scout-17b-16e-instruct"},
-    {"name": "Judge_OSS20B", "model": "groq/openai/gpt-oss-20b"},
-    {"name": "Judge_OSS120B", "model": "groq/openai/gpt-oss-120b"},
+    {"name": "Llama70B", "model": "groq/llama-3.3-70b-versatile"},
+    {"name": "Llama8B", "model": "groq/llama-3.1-8b-instant"},
+    {"name": "Qwen32B", "model": "groq/qwen/qwen3-32b"},
+    {"name": "Llama4Scout", "model": "groq/meta-llama/llama-4-scout-17b-16e-instruct"},
+    {"name": "OSS20B", "model": "groq/openai/gpt-oss-20b"},
+    {"name": "OSS120B", "model": "groq/openai/gpt-oss-120b"},
+    {"name": "Gemini25Flash", "model": "gemini/gemini-2.5-flash"},
+    {"name": "Gemini25FlashLite", "model": "gemini/gemini-2.5-flash-lite"},
+    {"name": "Gemini3Flash", "model": "gemini/gemini-3-flash-preview"},
+    {"name": "Gemini31FlashLite", "model": "gemini/gemini-3.1-flash-lite"},
+    {"name": "Gemini35Flash", "model": "gemini/gemini-3.5-flash"},
 ]
 
 _AGENT_BY_NAME = {a["name"]: a for a in AGENTS}
@@ -129,9 +134,10 @@ def run_agent(
     case_text: str,
     knowledge_context: str = "",
     allowed_diseases: list[str] | None = None,
+    api_keys: dict[str, str] | None = None,
 ) -> Diagnosis:
     prompt = build_prompt(case_text, knowledge_context, allowed_diseases)
-    raw = ask_llm(prompt, cfg["model"])
+    raw = ask_llm(prompt, cfg["model"], api_keys)
     return _parse_diagnosis(raw, cfg["name"], cfg["model"], allowed_diseases)
 
 
@@ -141,6 +147,7 @@ def run_all_agents(
     active_agent_names: list[str],
     knowledge_context: str = "",
     allowed_diseases: list[str] | None = None,
+    api_keys: dict[str, str] | None = None,
 ) -> tuple[list[Diagnosis], list[str]]:
     results: list[Diagnosis] = []
     failures: list[str] = []
@@ -150,7 +157,9 @@ def run_all_agents(
             raise ValueError(f"Unknown agent: {name}")
         try:
             results.append(
-                run_agent(cfg, case_text, knowledge_context, allowed_diseases)
+                run_agent(
+                    cfg, case_text, knowledge_context, allowed_diseases, api_keys
+                )
             )
         except Exception as exc:
             failures.append(f"{name}: {exc}")

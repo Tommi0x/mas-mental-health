@@ -4,6 +4,7 @@ import streamlit as st
 
 from agents import AGENTS, build_prompt
 from graph import RULES, run
+from llm import is_model_available, missing_api_key_errors, resolve_api_key, save_api_keys_to_env
 from knowledge_base.prompt import build_knowledge_context, list_allowed_diseases, list_categories
 from models import Diagnosis
 
@@ -18,14 +19,21 @@ _METHOD_DESCRIPTIONS: dict[str, str] = {
 }
 
 
-# Return all configured agent names for multiselect options.
-def _all_agent_names() -> list[str]:
-    return [agent["name"] for agent in AGENTS]
+_AGENT_MODELS = {agent["name"]: agent["model"] for agent in AGENTS}
 
 
-# Return the agent names used as the default selection in the UI.
-def _default_active_agents() -> list[str]:
-    return _all_agent_names()[:4]
+# Return agents whose provider API key is configured.
+def _available_agents(api_keys: dict[str, str]) -> list[dict[str, str]]:
+    return [
+        agent
+        for agent in AGENTS
+        if is_model_available(agent["model"], api_keys)
+    ]
+
+
+# Return the default multiselect selection from the available agent list.
+def _default_active_agent_names(available_names: list[str]) -> list[str]:
+    return available_names[:4]
 
 
 # Return category ids and a lookup map from id to display title.
@@ -56,23 +64,67 @@ def _render_prompt_preview(case_text: str, active_categories: list[str]) -> None
         st.code(prompt, language="text")
 
 
-# Render the sidebar with agent details.
-def _render_sidebar() -> None:
-    st.sidebar.header("Configuration")
+# Load sidebar API key fields from the environment on first run.
+def _init_api_key_fields() -> None:
+    if "groq_api_key" not in st.session_state:
+        st.session_state.groq_api_key = os.environ.get("GROQ_API_KEY", "")
+    if "gemini_api_key" not in st.session_state:
+        st.session_state.gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
 
-    groq_configured = bool(os.environ.get("GROQ_API_KEY", "").strip())
-    st.sidebar.subheader("Groq API")
-    if groq_configured:
-        st.sidebar.success("GROQ_API_KEY is configured.")
+
+# Return API keys entered in the sidebar.
+def _sidebar_api_keys() -> dict[str, str]:
+    return {
+        "GROQ_API_KEY": st.session_state.get("groq_api_key", ""),
+        "GEMINI_API_KEY": st.session_state.get("gemini_api_key", ""),
+    }
+
+
+# Render the sidebar API key fields.
+def _render_sidebar() -> dict[str, str]:
+    st.sidebar.header("Configuration")
+    _init_api_key_fields()
+
+    st.sidebar.subheader("API keys")
+    st.sidebar.caption(
+        "Enter keys here or set them in `.env`. Sidebar values take precedence. "
+        "Save writes non-empty keys to `.env`."
+    )
+    st.sidebar.text_input(
+        "Groq API key",
+        type="password",
+        key="groq_api_key",
+    )
+    st.sidebar.text_input(
+        "Gemini API key",
+        type="password",
+        key="gemini_api_key",
+    )
+
+    if st.sidebar.button("Save API keys"):
+        keys = _sidebar_api_keys()
+        if not any(value.strip() for value in keys.values()):
+            st.sidebar.warning("Enter at least one API key before saving.")
+        else:
+            save_api_keys_to_env(keys)
+            st.sidebar.success("API keys saved to `.env`.")
+
+    api_keys = _sidebar_api_keys()
+    if resolve_api_key("GROQ_API_KEY", api_keys):
+        st.sidebar.success("Groq key configured.")
     else:
         st.sidebar.warning(
-            "Set `GROQ_API_KEY` in a `.env` file or your environment. "
-            "Create a free key at https://console.groq.com"
+            "Groq key not set. [Get a free key at console.groq.com](https://console.groq.com)."
         )
 
-    st.sidebar.subheader("Available agents")
-    for agent in AGENTS:
-        st.sidebar.markdown(f"- `{agent['name']}` -> `{agent['model']}`")
+    if resolve_api_key("GEMINI_API_KEY", api_keys):
+        st.sidebar.success("Gemini key configured.")
+    else:
+        st.sidebar.warning(
+            "Gemini key not set. [Get a free key at Google AI Studio](https://aistudio.google.com/apikey)."
+        )
+
+    return api_keys
 
 
 # Render the Streamlit interface and run the analysis workflow.
@@ -84,15 +136,20 @@ def main() -> None:
         "aggregation rule, then run the analysis."
     )
 
-    _render_sidebar()
+    api_keys = _render_sidebar()
 
     agents_col, method_col = st.columns(2)
 
     with agents_col:
+        available_names = [agent["name"] for agent in _available_agents(api_keys)]
+        if not available_names:
+            st.info("Add API keys in the sidebar to enable agents.")
         active_agents = st.multiselect(
             "Active agents",
-            options=_all_agent_names(),
-            default=_default_active_agents(),
+            options=available_names,
+            default=_default_active_agent_names(available_names),
+            format_func=lambda name: f"{name} ({_AGENT_MODELS[name]})",
+            disabled=not available_names,
         )
 
     with method_col:
@@ -149,11 +206,12 @@ def main() -> None:
         if not active_agents:
             st.error("Select at least one active agent.")
             return
-        if not os.environ.get("GROQ_API_KEY", "").strip():
-            st.error(
-                "GROQ_API_KEY is not set. Copy `.env.example` to `.env`, add your free "
-                "Groq key from https://console.groq.com, then restart the app."
-            )
+        agent_models = [
+            agent["model"] for agent in AGENTS if agent["name"] in active_agents
+        ]
+        key_errors = missing_api_key_errors(agent_models, api_keys)
+        if key_errors:
+            st.error("\n\n".join(key_errors))
             return
 
         try:
@@ -165,6 +223,7 @@ def main() -> None:
                     active_categories,
                     agreement_percent=agreement_percent,
                     agent_weights=agent_weights,
+                    api_keys=api_keys,
                 )
         except Exception as exc:
             st.error(f"Analysis failed: {exc}")

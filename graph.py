@@ -22,6 +22,7 @@ class ClinicalGraphState(TypedDict):
     method: str
     agreement_percent: int
     agent_weights: dict[str, float]
+    api_keys: dict[str, str]
     diagnoses: list[Diagnosis]
     agent_failures: list[str]
     result: str
@@ -45,6 +46,7 @@ def execute_agents(state: ClinicalGraphState) -> dict[str, list[Diagnosis] | lis
         state["active_agents"],
         knowledge_context,
         allowed_diseases,
+        state.get("api_keys"),
     )
     if not diagnoses:
         detail = "; ".join(failures) if failures else "no valid responses"
@@ -96,6 +98,7 @@ def run(
     active_categories: list[str] | None = None,
     agreement_percent: int = 75,
     agent_weights: dict[str, float] | None = None,
+    api_keys: dict[str, str] | None = None,
 ) -> tuple[str, list[Diagnosis], list[str]]:
     if not active_agents:
         raise ValueError("At least one active agent is required")
@@ -107,6 +110,7 @@ def run(
         "method": method,
         "agreement_percent": agreement_percent,
         "agent_weights": agent_weights or {},
+        "api_keys": api_keys or {},
         "diagnoses": [],
         "agent_failures": [],
         "result": "",
