@@ -19,9 +19,6 @@ _METHOD_DESCRIPTIONS: dict[str, str] = {
 }
 
 
-_AGENT_MODELS = {agent["name"]: agent["model"] for agent in AGENTS}
-
-
 # Return agents whose provider API key is configured.
 def _available_agents(api_keys: dict[str, str]) -> list[dict[str, str]]:
     return [
@@ -33,7 +30,7 @@ def _available_agents(api_keys: dict[str, str]) -> list[dict[str, str]]:
 
 # Return the default multiselect selection from the available agent list.
 def _default_active_agent_names(available_names: list[str]) -> list[str]:
-    return available_names[:4]
+    return available_names[:2]
 
 
 # Return category ids and a lookup map from id to display title.
@@ -138,50 +135,45 @@ def main() -> None:
 
     api_keys = _render_sidebar()
 
-    agents_col, method_col = st.columns(2)
+    available_names = [agent["name"] for agent in _available_agents(api_keys)]
+    if not available_names:
+        st.info("Add API keys in the sidebar to enable agents.")
+    active_agents = st.multiselect(
+        "Active agents",
+        options=available_names,
+        default=_default_active_agent_names(available_names),
+        disabled=not available_names,
+    )
 
-    with agents_col:
-        available_names = [agent["name"] for agent in _available_agents(api_keys)]
-        if not available_names:
-            st.info("Add API keys in the sidebar to enable agents.")
-        active_agents = st.multiselect(
-            "Active agents",
-            options=available_names,
-            default=_default_active_agent_names(available_names),
-            format_func=lambda name: f"{name} ({_AGENT_MODELS[name]})",
-            disabled=not available_names,
+    method = st.selectbox("Aggregation method", options=list(RULES.keys()))
+    st.caption(_METHOD_DESCRIPTIONS[method])
+    agreement_percent = 75
+    agent_weights: dict[str, float] = {}
+    if method == "superconsent":
+        agreement_percent = st.slider(
+            "Agreement threshold (%)",
+            min_value=50,
+            max_value=100,
+            value=75,
+            step=1,
+            help="A diagnosis must reach this share of agent votes to win.",
         )
-
-    with method_col:
-        method = st.selectbox("Aggregation method", options=list(RULES.keys()))
-        st.caption(_METHOD_DESCRIPTIONS[method])
-        agreement_percent = 75
-        agent_weights: dict[str, float] = {}
-        if method == "superconsent":
-            agreement_percent = st.slider(
-                "Agreement threshold (%)",
-                min_value=50,
-                max_value=100,
-                value=75,
-                step=1,
-                help="A diagnosis must reach this share of agent votes to win.",
-            )
-        elif method == "weighted":
-            st.caption(
-                "Set a weight for each active agent. Higher weights count more toward the final diagnosis."
-            )
-            if not active_agents:
-                st.info("Select at least one active agent to configure weights.")
-            else:
-                for agent_name in active_agents:
-                    agent_weights[agent_name] = st.number_input(
-                        agent_name,
-                        min_value=0.1,
-                        max_value=10.0,
-                        value=1.0,
-                        step=0.1,
-                        key=f"agent_weight_{agent_name}",
-                    )
+    elif method == "weighted":
+        st.caption(
+            "Set a weight for each active agent. Higher weights count more toward the final diagnosis."
+        )
+        if not active_agents:
+            st.info("Select at least one active agent to configure weights.")
+        else:
+            for agent_name in active_agents:
+                agent_weights[agent_name] = st.number_input(
+                    agent_name,
+                    min_value=0.1,
+                    max_value=10.0,
+                    value=1.0,
+                    step=0.1,
+                    key=f"agent_weight_{agent_name}",
+                )
 
     category_ids, category_labels = _category_options()
     active_categories = st.multiselect(
