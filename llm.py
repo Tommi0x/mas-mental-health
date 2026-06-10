@@ -7,6 +7,7 @@ from dotenv import load_dotenv, set_key
 load_dotenv()
 
 ENV_FILE = Path(__file__).resolve().parent / ".env"
+ENV_EXAMPLE_FILE = Path(__file__).resolve().parent / ".env.example"
 
 
 class ApiProvider(TypedDict):
@@ -36,6 +37,31 @@ API_PROVIDERS: list[ApiProvider] = [
         "signup_url": "https://openrouter.ai/keys",
     },
 ]
+
+
+# Load placeholder API key values from `.env.example`.
+def _load_placeholder_api_keys() -> frozenset[str]:
+    placeholders: set[str] = set()
+    if not ENV_EXAMPLE_FILE.exists():
+        return frozenset()
+    for line in ENV_EXAMPLE_FILE.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        _, _, value = line.partition("=")
+        value = value.strip().strip('"').strip("'")
+        if value:
+            placeholders.add(value)
+    return frozenset(placeholders)
+
+
+PLACEHOLDER_API_KEYS = _load_placeholder_api_keys()
+
+
+# Return whether the value is a non-placeholder API key.
+def is_configured_api_key(value: str) -> bool:
+    key = value.strip()
+    return bool(key) and key not in PLACEHOLDER_API_KEYS
 
 
 # Return the sidebar session-state key for a provider environment variable.
@@ -82,9 +108,12 @@ def _missing_key_message(env_name: str) -> str:
 def resolve_api_key(env_name: str, api_keys: dict[str, str] | None = None) -> str:
     if api_keys:
         ui_key = api_keys.get(env_name, "").strip()
-        if ui_key:
+        if is_configured_api_key(ui_key):
             return ui_key
-    return os.environ.get(env_name, "").strip()
+    env_key = os.environ.get(env_name, "").strip()
+    if is_configured_api_key(env_key):
+        return env_key
+    return ""
 
 
 # Persist non-empty API keys to `.env` and update the current process environment.
@@ -93,7 +122,7 @@ def save_api_keys_to_env(api_keys: dict[str, str]) -> None:
         ENV_FILE.write_text("", encoding="utf-8")
     for env_name, value in api_keys.items():
         key = value.strip()
-        if not key:
+        if not is_configured_api_key(key):
             continue
         set_key(str(ENV_FILE), env_name, key)
         os.environ[env_name] = key

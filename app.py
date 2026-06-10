@@ -1,5 +1,3 @@
-import os
-
 import streamlit as st
 
 from agents import AGENTS, AgentProgressState, build_prompt
@@ -145,7 +143,7 @@ def _init_api_key_fields() -> None:
     for provider in API_PROVIDERS:
         field_key = provider_session_key(provider["env_name"])
         if field_key not in st.session_state:
-            st.session_state[field_key] = os.environ.get(provider["env_name"], "")
+            st.session_state[field_key] = resolve_api_key(provider["env_name"])
 
 
 # Return API keys entered in the sidebar.
