@@ -36,13 +36,7 @@ Model-based multi-agent system for psychiatric clinical cases. Multiple LLM judg
 
    Each key is optional; you only need keys for the providers whose agents you plan to run.
 
-3. Verify connectivity:
-
-   ```bash
-   python test_llm.py
-   ```
-
-4. Start the Streamlit app:
+3. Start the Streamlit app:
 
    ```bash
    streamlit run app.py
@@ -62,13 +56,6 @@ Agents use supported providers' free tiers via LiteLLM (configure one or more):
 | OSS120B | `groq/openai/gpt-oss-120b` |
 | Gemini31FlashLite | `gemini/gemini-3.1-flash-lite` |
 | Gemini35Flash | `gemini/gemini-3.5-flash` |
-
-### OpenRouter free agents (`:free` tier)
-
-Requires `OPENROUTER_API_KEY`. Overlaps with Groq/Gemini agents are omitted; one model per family on OpenRouter.
-
-| Agent | Model |
-|-------|-------|
 | OR_DolphinMistral24B | `openrouter/cognitivecomputations/dolphin-mistral-24b-venice-edition:free` |
 | OR_Gemma4_26B | `openrouter/google/gemma-4-26b-a4b-it:free` |
 | OR_KimiK26 | `openrouter/moonshotai/kimi-k2.6:free` |
