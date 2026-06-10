@@ -2,7 +2,7 @@ import os
 
 import streamlit as st
 
-from agents import AGENTS, build_prompt
+from agents import AGENTS, AgentProgressState, build_prompt
 from graph import RULES, run
 from llm import (
     API_PROVIDERS,
@@ -24,6 +24,39 @@ _METHOD_DESCRIPTIONS: dict[str, str] = {
     ),
     "weighted": "Each agent vote is multiplied by its weight; the diagnosis with the highest total wins.",
 }
+
+_AGENT_MODELS = {agent["name"]: agent["model"] for agent in AGENTS}
+
+
+# Render live agent progress at the bottom of the page during analysis.
+def _render_agent_progress(
+    progress_area: st.delta_generator.DeltaGenerator,
+    state: AgentProgressState,
+    agent_order: list[str],
+) -> None:
+    finished = len(state["completed"]) + len(state["failed"])
+    progress_value = finished / state["total"] if state["total"] else 0.0
+    running = set(state["running"])
+    completed = set(state["completed"])
+    failed = set(state["failed"])
+
+    with progress_area.container():
+        st.subheader("Analysis progress")
+        st.caption(
+            f"Batch {state['batch_index']} of {state['batch_count']} · "
+            f"{finished} of {state['total']} agents finished"
+        )
+        st.progress(progress_value)
+        for agent_name in agent_order:
+            model = _AGENT_MODELS.get(agent_name, "")
+            if agent_name in running:
+                st.markdown(f"- :orange[{agent_name}] `{model}` — running")
+            elif agent_name in completed:
+                st.markdown(f"- :green[{agent_name}] `{model}` — done")
+            elif agent_name in failed:
+                st.markdown(f"- :red[{agent_name}] `{model}` — failed")
+            else:
+                st.markdown(f"- {agent_name} `{model}` — queued")
 
 
 # Return agents whose provider API key is configured.
@@ -246,20 +279,28 @@ def main() -> None:
             st.error("\n\n".join(key_errors))
             return
 
+        progress_area = st.empty()
+
+        def _on_agent_progress(state: AgentProgressState) -> None:
+            _render_agent_progress(progress_area, state, active_agents)
+
         try:
-            with st.spinner("Running clinical analysis..."):
-                result, diagnoses, agent_failures = run(
-                    case_text,
-                    method,
-                    active_agents,
-                    active_categories,
-                    agreement_percent=agreement_percent,
-                    agent_weights=agent_weights,
-                    api_keys=api_keys,
-                )
+            result, diagnoses, agent_failures = run(
+                case_text,
+                method,
+                active_agents,
+                active_categories,
+                agreement_percent=agreement_percent,
+                agent_weights=agent_weights,
+                api_keys=api_keys,
+                progress_callback=_on_agent_progress,
+            )
         except Exception as exc:
+            progress_area.empty()
             st.error(f"Analysis failed: {exc}")
             return
+
+        progress_area.empty()
 
         if agent_failures:
             st.warning(

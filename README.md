@@ -8,6 +8,7 @@ Model-based multi-agent system for psychiatric clinical cases. Multiple LLM judg
 - At least one free API key from a supported provider (no credit card required):
   - [Groq](https://console.groq.com)
   - [Gemini](https://aistudio.google.com/apikey)
+  - [OpenRouter](https://openrouter.ai/keys)
 
 ## Setup
 
@@ -30,6 +31,7 @@ Model-based multi-agent system for psychiatric clinical cases. Multiple LLM judg
    ```
    GROQ_API_KEY=gsk_...
    GEMINI_API_KEY=...
+   OPENROUTER_API_KEY=sk-or-...
    ```
 
    Each key is optional; you only need keys for the providers whose agents you plan to run.
@@ -58,11 +60,21 @@ Agents use supported providers' free tiers via LiteLLM (configure one or more):
 | Llama4Scout | `groq/meta-llama/llama-4-scout-17b-16e-instruct` |
 | OSS20B | `groq/openai/gpt-oss-20b` |
 | OSS120B | `groq/openai/gpt-oss-120b` |
-| Gemini25Flash | `gemini/gemini-2.5-flash` |
-| Gemini25FlashLite | `gemini/gemini-2.5-flash-lite` |
-| Gemini3Flash | `gemini/gemini-3-flash-preview` |
 | Gemini31FlashLite | `gemini/gemini-3.1-flash-lite` |
 | Gemini35Flash | `gemini/gemini-3.5-flash` |
+
+### OpenRouter free agents (`:free` tier)
+
+Requires `OPENROUTER_API_KEY`. Overlaps with Groq/Gemini agents are omitted; one model per family on OpenRouter.
+
+| Agent | Model |
+|-------|-------|
+| OR_DolphinMistral24B | `openrouter/cognitivecomputations/dolphin-mistral-24b-venice-edition:free` |
+| OR_Gemma4_26B | `openrouter/google/gemma-4-26b-a4b-it:free` |
+| OR_KimiK26 | `openrouter/moonshotai/kimi-k2.6:free` |
+| OR_NemotronNano9B | `openrouter/nvidia/nemotron-nano-9b-v2:free` |
+| OR_LagunaXS2 | `openrouter/poolside/laguna-xs.2:free` |
+| OR_NexN2Pro | `openrouter/nex-agi/nex-n2-pro:free` |
 
 ## Project layout
 
@@ -76,4 +88,4 @@ Agents use supported providers' free tiers via LiteLLM (configure one or more):
 
 ## Disclaimer
 
-This is a research demo, not a clinical tool. Case text is sent to the configured cloud APIs (Groq, Gemini) when you run an analysis.
+This is a research demo, not a clinical tool. Case text is sent to the configured cloud APIs when you run an analysis.

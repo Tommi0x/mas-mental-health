@@ -1,8 +1,8 @@
-from typing import Callable, TypedDict
+from typing import Callable, NotRequired, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
-from agents import run_all_agents
+from agents import AgentProgressCallback, run_all_agents
 from aggregate import (
     aggregate_copeland,
     aggregate_majority,
@@ -26,6 +26,7 @@ class ClinicalGraphState(TypedDict):
     diagnoses: list[Diagnosis]
     agent_failures: list[str]
     result: str
+    progress_callback: NotRequired[AgentProgressCallback | None]
 
 
 RULES: dict[str, AggregationRule] = {
@@ -47,6 +48,7 @@ def execute_agents(state: ClinicalGraphState) -> dict[str, list[Diagnosis] | lis
         knowledge_context,
         allowed_diseases,
         state.get("api_keys"),
+        progress_callback=state.get("progress_callback"),
     )
     if not diagnoses:
         detail = "; ".join(failures) if failures else "no valid responses"
@@ -99,6 +101,7 @@ def run(
     agreement_percent: int = 75,
     agent_weights: dict[str, float] | None = None,
     api_keys: dict[str, str] | None = None,
+    progress_callback: AgentProgressCallback | None = None,
 ) -> tuple[str, list[Diagnosis], list[str]]:
     if not active_agents:
         raise ValueError("At least one active agent is required")
@@ -114,6 +117,7 @@ def run(
         "diagnoses": [],
         "agent_failures": [],
         "result": "",
+        "progress_callback": progress_callback,
     }
     final_state = _GRAPH.invoke(state)
     return (

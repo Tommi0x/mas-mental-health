@@ -29,6 +29,12 @@ API_PROVIDERS: list[ApiProvider] = [
         "display_name": "Gemini",
         "signup_url": "https://aistudio.google.com/apikey",
     },
+    {
+        "env_name": "OPENROUTER_API_KEY",
+        "model_prefix": "openrouter/",
+        "display_name": "OpenRouter",
+        "signup_url": "https://openrouter.ai/keys",
+    },
 ]
 
 
@@ -51,6 +57,14 @@ def _env_name_for_model(model: str) -> str | None:
         if model.startswith(provider["model_prefix"]):
             return provider["env_name"]
     return None
+
+
+# Return the model prefix that identifies the API provider for a LiteLLM model id.
+def provider_key_for_model(model: str) -> str:
+    for provider in API_PROVIDERS:
+        if model.startswith(provider["model_prefix"]):
+            return provider["model_prefix"]
+    return "other"
 
 
 # Return setup hints for a missing API key environment variable.
