@@ -5,8 +5,9 @@ Model-based multi-agent system for psychiatric clinical cases. Multiple LLM judg
 ## Requirements
 
 - Python 3.11+
-- A free [Groq](https://console.groq.com) API key (no credit card required)
-- An optional free [Gemini](https://aistudio.google.com/apikey) API key for additional agents
+- At least one free API key from a supported provider (no credit card required):
+  - [Groq](https://console.groq.com)
+  - [Gemini](https://aistudio.google.com/apikey)
 
 ## Setup
 
@@ -18,20 +19,20 @@ Model-based multi-agent system for psychiatric clinical cases. Multiple LLM judg
    pip install -r requirements.txt
    ```
 
-2. Copy the example environment file and add your API keys:
+2. Copy the example environment file and add API keys for the providers you want to use:
 
    ```bash
    copy .env.example .env
    ```
 
-   Edit `.env` and set:
+   Edit `.env` and set any combination of:
 
    ```
    GROQ_API_KEY=gsk_...
    GEMINI_API_KEY=...
    ```
 
-   `GEMINI_API_KEY` is only required when you select Gemini agents in the app.
+   Each key is optional; you only need keys for the providers whose agents you plan to run.
 
 3. Verify connectivity:
 
@@ -47,7 +48,7 @@ Model-based multi-agent system for psychiatric clinical cases. Multiple LLM judg
 
 ## Default agents
 
-Agents use Groq and Gemini free tiers via LiteLLM:
+Agents use supported providers' free tiers via LiteLLM (configure one or more):
 
 | Agent | Model |
 |-------|-------|

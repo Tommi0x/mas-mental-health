@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from typing import TypedDict
 
 from dotenv import load_dotenv, set_key
 
@@ -8,28 +9,59 @@ load_dotenv()
 ENV_FILE = Path(__file__).resolve().parent / ".env"
 
 
+class ApiProvider(TypedDict):
+    env_name: str
+    model_prefix: str
+    display_name: str
+    signup_url: str
+
+
+API_PROVIDERS: list[ApiProvider] = [
+    {
+        "env_name": "GROQ_API_KEY",
+        "model_prefix": "groq/",
+        "display_name": "Groq",
+        "signup_url": "https://console.groq.com",
+    },
+    {
+        "env_name": "GEMINI_API_KEY",
+        "model_prefix": "gemini/",
+        "display_name": "Gemini",
+        "signup_url": "https://aistudio.google.com/apikey",
+    },
+]
+
+
+# Return the sidebar session-state key for a provider environment variable.
+def provider_session_key(env_name: str) -> str:
+    return env_name.replace("_API_KEY", "_api_key").lower()
+
+
+# Return provider metadata for the given environment variable name.
+def _provider_for_env(env_name: str) -> ApiProvider | None:
+    for provider in API_PROVIDERS:
+        if provider["env_name"] == env_name:
+            return provider
+    return None
+
+
 # Return the environment variable name for the API key required by the model, if any.
 def _env_name_for_model(model: str) -> str | None:
-    if model.startswith("groq/"):
-        return "GROQ_API_KEY"
-    if model.startswith("gemini/"):
-        return "GEMINI_API_KEY"
+    for provider in API_PROVIDERS:
+        if model.startswith(provider["model_prefix"]):
+            return provider["env_name"]
     return None
 
 
 # Return setup hints for a missing API key environment variable.
 def _missing_key_message(env_name: str) -> str:
-    if env_name == "GROQ_API_KEY":
-        return (
-            "Groq API key is not set. Enter it in the sidebar, add GROQ_API_KEY to `.env`, "
-            "or create a free key at https://console.groq.com"
-        )
-    if env_name == "GEMINI_API_KEY":
-        return (
-            "Gemini API key is not set. Enter it in the sidebar, add GEMINI_API_KEY to `.env`, "
-            "or create a free key at https://aistudio.google.com/apikey"
-        )
-    return f"{env_name} is not set."
+    provider = _provider_for_env(env_name)
+    if provider is None:
+        return f"{env_name} is not set."
+    return (
+        f"{provider['display_name']} API key is not set. Enter it in the sidebar, "
+        f"add {env_name} to `.env`, or create a free key at {provider['signup_url']}"
+    )
 
 
 # Resolve an API key from the UI map first, then from the environment.

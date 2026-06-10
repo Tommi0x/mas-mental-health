@@ -4,7 +4,14 @@ import streamlit as st
 
 from agents import AGENTS, build_prompt
 from graph import RULES, run
-from llm import is_model_available, missing_api_key_errors, resolve_api_key, save_api_keys_to_env
+from llm import (
+    API_PROVIDERS,
+    is_model_available,
+    missing_api_key_errors,
+    provider_session_key,
+    resolve_api_key,
+    save_api_keys_to_env,
+)
 from knowledge_base.prompt import build_knowledge_context, list_allowed_diseases, list_categories
 from models import Diagnosis
 
@@ -28,9 +35,48 @@ def _available_agents(api_keys: dict[str, str]) -> list[dict[str, str]]:
     ]
 
 
-# Return the default multiselect selection from the available agent list.
+# Return a balanced default selection across configured providers when possible.
 def _default_active_agent_names(available_names: list[str]) -> list[str]:
-    return available_names[:2]
+    if not available_names:
+        return []
+
+    available_set = set(available_names)
+    provider_groups: list[list[str]] = []
+    for provider in API_PROVIDERS:
+        group = [
+            agent["name"]
+            for agent in AGENTS
+            if agent["model"].startswith(provider["model_prefix"])
+            and agent["name"] in available_set
+        ]
+        if group:
+            provider_groups.append(group)
+
+    if not provider_groups:
+        return available_names[:2]
+
+    defaults: list[str] = []
+    index = 0
+    while len(defaults) < 2:
+        added = False
+        for group in provider_groups:
+            if index < len(group):
+                name = group[index]
+                if name not in defaults:
+                    defaults.append(name)
+                    added = True
+                if len(defaults) >= 2:
+                    return defaults
+        if not added:
+            for name in available_names:
+                if name not in defaults:
+                    defaults.append(name)
+                if len(defaults) >= 2:
+                    break
+            return defaults[:2]
+        index += 1
+
+    return defaults[:2]
 
 
 # Return category ids and a lookup map from id to display title.
@@ -63,17 +109,19 @@ def _render_prompt_preview(case_text: str, active_categories: list[str]) -> None
 
 # Load sidebar API key fields from the environment on first run.
 def _init_api_key_fields() -> None:
-    if "groq_api_key" not in st.session_state:
-        st.session_state.groq_api_key = os.environ.get("GROQ_API_KEY", "")
-    if "gemini_api_key" not in st.session_state:
-        st.session_state.gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
+    for provider in API_PROVIDERS:
+        field_key = provider_session_key(provider["env_name"])
+        if field_key not in st.session_state:
+            st.session_state[field_key] = os.environ.get(provider["env_name"], "")
 
 
 # Return API keys entered in the sidebar.
 def _sidebar_api_keys() -> dict[str, str]:
     return {
-        "GROQ_API_KEY": st.session_state.get("groq_api_key", ""),
-        "GEMINI_API_KEY": st.session_state.get("gemini_api_key", ""),
+        provider["env_name"]: st.session_state.get(
+            provider_session_key(provider["env_name"]), ""
+        )
+        for provider in API_PROVIDERS
     }
 
 
@@ -84,19 +132,16 @@ def _render_sidebar() -> dict[str, str]:
 
     st.sidebar.subheader("API keys")
     st.sidebar.caption(
-        "Enter keys here or set them in `.env`. Sidebar values take precedence. "
-        "Save writes non-empty keys to `.env`."
+        "All providers are optional. Add a key only for the providers you want to use; "
+        "their agents appear in Active agents after the key is set. Sidebar values override "
+        "`.env`. Save writes non-empty keys to `.env`."
     )
-    st.sidebar.text_input(
-        "Groq API key",
-        type="password",
-        key="groq_api_key",
-    )
-    st.sidebar.text_input(
-        "Gemini API key",
-        type="password",
-        key="gemini_api_key",
-    )
+    for provider in API_PROVIDERS:
+        st.sidebar.text_input(
+            f"{provider['display_name']} API key",
+            type="password",
+            key=provider_session_key(provider["env_name"]),
+        )
 
     if st.sidebar.button("Save API keys"):
         keys = _sidebar_api_keys()
@@ -107,19 +152,14 @@ def _render_sidebar() -> dict[str, str]:
             st.sidebar.success("API keys saved to `.env`.")
 
     api_keys = _sidebar_api_keys()
-    if resolve_api_key("GROQ_API_KEY", api_keys):
-        st.sidebar.success("Groq key configured.")
-    else:
-        st.sidebar.warning(
-            "Groq key not set. [Get a free key at console.groq.com](https://console.groq.com)."
-        )
-
-    if resolve_api_key("GEMINI_API_KEY", api_keys):
-        st.sidebar.success("Gemini key configured.")
-    else:
-        st.sidebar.warning(
-            "Gemini key not set. [Get a free key at Google AI Studio](https://aistudio.google.com/apikey)."
-        )
+    for provider in API_PROVIDERS:
+        if resolve_api_key(provider["env_name"], api_keys):
+            st.sidebar.success(f"{provider['display_name']} key configured.")
+        else:
+            st.sidebar.info(
+                f"{provider['display_name']} not configured. "
+                f"[Get a free key]({provider['signup_url']})."
+            )
 
     return api_keys
 
@@ -137,7 +177,7 @@ def main() -> None:
 
     available_names = [agent["name"] for agent in _available_agents(api_keys)]
     if not available_names:
-        st.info("Add API keys in the sidebar to enable agents.")
+        st.info("Add at least one provider API key in the sidebar to enable agents.")
     active_agents = st.multiselect(
         "Active agents",
         options=available_names,
